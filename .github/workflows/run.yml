@@ -22,23 +22,15 @@ permissions:
 env:
   COBOL_EXECUTABLE: coin
   ARTIFACT_NAME: coin-bin
-  BUILD_WORKFLOW_FILE: build.yml  # <-- nome do SEU workflow de build
+  BUILD_WORKFLOW_FILE: build.yml
 
 jobs:
   run:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout do repositório (cotacao.txt vem daqui)
+      - name: Checkout do repositório
         uses: actions/checkout@v4
-
-      - name: Debug – listar workflows e caminhos
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api repos/${{ github.repository }}/actions/workflows \
-            | jq -r '.workflows[] | "\(.id)  \(.name)  \(.path)"'
-
 
       - name: Descobrir última execução concluída do build
         id: find
@@ -53,8 +45,6 @@ jobs:
           wid="$(gh api repos/${{ github.repository }}/actions/workflows \
             | jq -r --arg wf "/$WF" '.workflows[] | select(.path | endswith($wf)) | .id')"
       
-          echo "Workflow ID encontrado: $wid"
-
           # Buscar executações concluídas (success OU failure)
           rid="$(
             gh api repos/${{ github.repository }}/actions/workflows/$wid/runs \
@@ -73,3 +63,17 @@ jobs:
           fi
 
           echo "run_id=$rid" >> "$GITHUB_OUTPUT"
+
+      - name: Baixar artifact (binário compilado)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download ${{ steps.find.outputs.run_id }} \
+            -n ${{ env.ARTIFACT_NAME }} \
+            -R ${{ github.repository }}
+          
+          chmod +x ${{ env.COBOL_EXECUTABLE }}
+
+      - name: Executar conversor de moedas
+        run: |
+          ./${{ env.COBOL_EXECUTABLE }} "${{ github.event.inputs.valor_brl }}" "${{ github.event.inputs.moeda_destino }}"
