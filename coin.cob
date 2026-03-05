@@ -1,5 +1,5 @@
-IDENTIFICATION DIVISION.
-       PROGRAM-ID. CONVERTER.
+      IDENTIFICATION DIVISION.
+       PROGRAM-ID. COIN.
 
        ENVIRONMENT DIVISION.
        INPUT-OUTPUT SECTION.
@@ -16,31 +16,35 @@ IDENTIFICATION DIVISION.
           05 FRAC-PARTE   PIC 9(5).
 
        WORKING-STORAGE SECTION.
+
+       *> Argumentos recebidos
+
        01 WS-ARGUMENTO PIC X(100).
        01 LEN1          PIC 9(3).
        01 LEN2          PIC 9(3).
       
-       01 WS-ARG1         PIC X(30).
-       01 WS-ARG2         PIC X(10).
+       01 WS-VALOR-TXT       PIC X(30).
+       01 WS-DESTINO         PIC X(3).
 
-       01 WS-VALOR-TXT    PIC X(30).
-       01 WS-VALOR-NORM   PIC X(30).
-       01 WS-VALOR        PIC 9(10)V9(10).
-       01 WS-DESTINO      PIC X(3).
+       *> Normalização e conversão
+       01 WS-VALOR-NORM      PIC X(30).
+       01 WS-VALOR-NUM       PIC 9(10)V9(10).
 
-       01 WS-TAXA-ENCONTRADA   PIC 9(10)V9(10).
-       01 WS-TEMP-INT          PIC 9(10).
-       01 WS-TEMP-FRAC         PIC 9(10).
+       *> Leitura de moedas
+       01 WS-TEMP-INT        PIC 9(10).
+       01 WS-TEMP-FRAC       PIC 9(10).
+       01 WS-TAXA            PIC 9(10)V9(10).
 
-       01 FLAG-FOUND      PIC X VALUE "N".
+       01 EOF-FLAG           PIC X VALUE "N".
+       01 FOUND-FLAG         PIC X VALUE "N".
 
-       01 I               PIC 9(3).
+       01 I                  PIC 9(3).
 
        PROCEDURE DIVISION.
 
        MAIN-START.
 
-      *> Receber todos os argumentos da linha de comando
+      *> Receber todos os argumentos da linha de comando do YAML
            ACCEPT WS-ARGUMENTO FROM COMMAND-LINE.
            
       *> Analisar os argumentos recebidos e separa em 2 campos
@@ -49,10 +53,9 @@ IDENTIFICATION DIVISION.
                     WS-DESTINO COUNT IN LEN2
            END-UNSTRING.
 
-      *---------------------------------------------------------
-      * VALIDAR INPUT – PERMITIR SOMENTE: 0–9 . ,
-      *---------------------------------------------------------
-           MOVE ZERO TO I.
+           *> ---------------------------------------------------
+           *> Validar caracteres: somente 0-9 . ,
+           *> ---------------------------------------------------
            PERFORM VARYING I FROM 1 BY 1 UNTIL I > LENGTH OF WS-VALOR-TXT
               EVALUATE WS-VALOR-TXT(I:1)
                  WHEN "0" THRU "9"
@@ -69,44 +72,46 @@ IDENTIFICATION DIVISION.
               END-EVALUATE
            END-PERFORM.
 
-      * Trocar vírgula por ponto
+           *> Trocar vírgula por ponto
            MOVE WS-VALOR-TXT TO WS-VALOR-NORM.
            INSPECT WS-VALOR-NORM REPLACING ALL "," BY ".".
 
-      * Converter para número
-           COMPUTE WS-VALOR = FUNCTION NUMVAL(WS-VALOR-NORM).
+           *> Converter string → número
+           COMPUTE WS-VALOR-NUM = FUNCTION NUMVAL(WS-VALOR-NORM).
 
-      *---------------------------------------------------------
-      * Ler arquivo de moedas
-      *---------------------------------------------------------
+           *> ---------------------------------------------------
+           *> Ler arquivo moeda.txt
+           *> ---------------------------------------------------
            OPEN INPUT MOEDAS.
 
-           PERFORM UNTIL FLAG-FOUND = "Y" OR EOF
+           PERFORM UNTIL EOF-FLAG = "Y" OR FOUND-FLAG = "Y"
               READ MOEDAS
-                 AT END MOVE "Y" TO EOF
+                 AT END MOVE "Y" TO EOF-FLAG
               END-READ
 
-              IF COD-MOEDA = WS-DESTINO
-                 MOVE INT-PARTE  TO WS-TEMP-INT
-                 MOVE FRAC-PARTE TO WS-TEMP-FRAC
-                 COMPUTE WS-TAXA-ENCONTRADA =
-                     WS-TEMP-INT + (WS-TEMP-FRAC / 100000)
-                 MOVE "Y" TO FLAG-FOUND
+              IF EOF-FLAG NOT = "Y"
+                 IF COD-MOEDA = WS-DESTINO
+                    MOVE INT-PARTE  TO WS-TEMP-INT
+                    MOVE FRAC-PARTE TO WS-TEMP-FRAC
+                    COMPUTE WS-TAXA =
+                       WS-TEMP-INT + (WS-TEMP-FRAC / 100000)
+                    MOVE "Y" TO FOUND-FLAG
+                 END-IF
               END-IF
            END-PERFORM.
 
            CLOSE MOEDAS.
 
-           IF FLAG-FOUND NOT = "Y"
+           IF FOUND-FLAG NOT = "Y"
               DISPLAY "ERRO: Moeda nao encontrada."
               STOP RUN
            END-IF.
 
-      *---------------------------------------------------------
-      * Calcular conversão
-      *---------------------------------------------------------
-           COMPUTE WS-VALOR = WS-VALOR * WS-TAXA-ENCONTRADA.
+           *> ---------------------------------------------------
+           *> Calcular conversão
+           *> ---------------------------------------------------
+           COMPUTE WS-VALOR-NUM = WS-VALOR-NUM * WS-TAXA.
 
-           DISPLAY "RESULTADO: " WS-VALOR.
+           DISPLAY "RESULTADO: " WS-VALOR-NUM.
 
            STOP RUN.
