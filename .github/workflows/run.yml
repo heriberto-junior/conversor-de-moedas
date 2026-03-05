@@ -32,6 +32,12 @@ jobs:
       - name: Checkout do repositório (cotacao.txt vem daqui)
         uses: actions/checkout@v4
 
+      - name: Debug – listar workflows e caminhos
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/${{ github.repository }}/actions/workflows | jq -r '.workflows[] | "\(.id)  \(.name)  \(.path)"
+
       - name: Descobrir run-id mais recente e bem-sucedido do build
         id: find
         env:
