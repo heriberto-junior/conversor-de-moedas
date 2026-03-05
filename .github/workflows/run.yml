@@ -32,6 +32,12 @@ jobs:
       - name: Checkout do repositório
         uses: actions/checkout@v4
 
+      - name: Instalar GNU COBOL (para libraries, se necessário)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcob4
+          echo "✓ Bibliotecas GNU COBOL instaladas"
+
       - name: Descobrir última execução concluída do build
         id: find
         env:
@@ -73,6 +79,7 @@ jobs:
             -R ${{ github.repository }}
           
           chmod +x ${{ env.COBOL_EXECUTABLE }}
+          echo "✓ Binário pronto para execução"
 
       - name: Executar conversor de moedas
         run: |
