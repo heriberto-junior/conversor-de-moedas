@@ -39,68 +39,37 @@ jobs:
           gh api repos/${{ github.repository }}/actions/workflows \
             | jq -r '.workflows[] | "\(.id)  \(.name)  \(.path)"'
 
-      - name: Descobrir run-id mais recente e bem-sucedido do build
+
+      - name: Descobrir última execução concluída do build
         id: find
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # 1) Achar o workflow ID do arquivo build.yml
-          wid=$(gh api repos/${{ github.repository }}/actions/workflows | \
-                jq -r ".workflows[] | select(.path | endswith(\"/${{ env.BUILD_WORKFLOW_FILE }}\")) | .id" | head -n1)
-          if [ -z "$wid" ]; then
-            echo "Não encontrei o workflow ${{ env.BUILD_WORKFLOW_FILE }}"; exit 1
-          fi
+          set -euo pipefail
 
-          # 2) Pegar a última execução bem-sucedida
-          rid=$(gh api repos/${{ github.repository }}/actions/workflows/$wid/runs \
-                -F status=success -F per_page=1 | jq -r '.workflow_runs[0].id')
-          if [ -z "$rid" ] || [ "$rid" = "null" ]; then
-            echo "Nenhuma execução bem-sucedida encontrada para o build"; exit 1
-          fi
+          WF="build.yml"
 
-          echo "run_id=$rid" >> "$GITHUB_OUTPUT"
+          # Achar o workflow id
+          wid="$(gh api repos/${{ github.repository }}/actions/workflows \
+            | jq -r --arg wf "/$WF" '.workflows[] | select(.path | endswith($wf)) | .id')"
+      
+          echo "Workflow ID encontrado: $wid"
 
-      - name: Baixar binário compilado (do build mais recente)
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ env.ARTIFACT_NAME }}     # coin-bin
-          run-id: ${{ steps.find.outputs.run_id }}
-          github-token: ${{ github.token }}  # token para acessar outra run
+          # Buscar executações concluídas (success OU failure)
+          rid="$(
+            gh api repos/${{ github.repository }}/actions/workflows/$wid/runs \
+            | jq -r '
+                .workflow_runs
+                | map(select(.status=="completed"))
+                | sort_by(.run_number)
+                | reverse
+                | .[0].id // empty
+              '
+          )"
 
-      - name: Garantir permissão de execução
-        run: chmod +x "${{ env.COBOL_EXECUTABLE }}"
-
-      - name: Executar conversão
-        id: run
-        env:
-          VALOR: ${{ inputs.valor_brl }}
-          MOEDA: ${{ inputs.moeda_destino }}
-        run: |
-          set -e
-          ./${{ env.COBOL_EXECUTABLE }} "$VALOR" "$MOEDA" | tee output.txt
-          if grep -q "^ERRO:" output.txt; then
-            cat output.txt
+          if [ -z "${rid:-}" ]; then
+            echo "Nenhuma execução CONCLUÍDA encontrada para o build"
             exit 1
           fi
 
-      - name: Extrair resultado
-        id: parse
-        run: |
-          line=$(grep "^RESULTADO:" output.txt | head -n1 || true)
-          [ -z "$line" ] && { echo "Não foi possível localizar a linha de resultado."; exit 1; }
-          valor=$(echo "$line" | awk '{print $2}')
-          moeda=$(echo "$line" | awk '{print $3}')
-          {
-            echo "resultado_pretty=$line"
-            echo "valor_num=$valor"
-            echo "moeda_out=$moeda"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Publicar no resumo
-        run: |
-          {
-            echo "### Conversão de BRL"
-            echo "- **Entrada**: \`${{ inputs.valor_brl }} BRL\`"
-            echo "- **Moeda destino**: \`${{ inputs.moeda_destino }}\`"
-            echo "- **Resultado**: \`${{ steps.parse.outputs.resultado_pretty }}\`"
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "run_id=$rid" >> "$GITHUB_OUTPUT"
