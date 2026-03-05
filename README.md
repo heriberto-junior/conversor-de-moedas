@@ -1,2 +1,3 @@
-# conversor-de-moedas
-Converte
+# Conversor de Moedas Cobol
+
+Projeto em fase inicial.
