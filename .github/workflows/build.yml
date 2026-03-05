@@ -1,4 +1,4 @@
-name: COBOL Build (artifact) - Compilação2
+name: COBOL Build (artifact) - Compilação
 
 on:
   push:
